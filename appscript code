@@ -1,0 +1,102 @@
+function processSheetsBatch() {
+  try {
+    var sourceSpreadsheetId = '1rMB63FOtMi2MEkiJP3otnVcQV_ON3x76kVWbtHyGkB8';
+    var destinationSpreadsheetId = '12WwPEzvaU-B3AAlzIIvXvYkzrp7t8wwXM0hbR703dmI';
+
+    var sourceSpreadsheet = SpreadsheetApp.openById(sourceSpreadsheetId);
+    var destinationSpreadsheet = SpreadsheetApp.openById(destinationSpreadsheetId);
+
+    var sourceSheets = sourceSpreadsheet.getSheets();
+
+    var batchSize = 3; // Set the number of sheets to process in each batch
+
+    for (var i = 0; i < sourceSheets.length; i += batchSize) {
+      var batchSheets = sourceSheets.slice(i, i + batchSize);
+      processSheetsBatchInternal(batchSheets, destinationSpreadsheet);
+    }
+
+    Logger.log('All data transferred successfully.');
+
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+}
+
+function processSheetsBatchInternal(sheets, destinationSpreadsheet) {
+  for (var i = 0; i < sheets.length; i++) {
+    copyDataAndAddColumnsForSheet(sheets[i], destinationSpreadsheet);
+  }
+}
+
+function copyDataAndAddColumnsForSheet(sourceSheet, destinationSpreadsheet) {
+  try {
+    var sourceSheetName = sourceSheet.getName();
+    var destinationSheet = getOrCreateDestinationSheet(sourceSheetName, destinationSpreadsheet);
+
+    var data = sourceSheet.getDataRange().getValues();
+
+    copyDataToDestinationSheet(data, destinationSheet);
+
+    // Check if the sheet name contains a specific keyword (e.g., 'mysheet')
+    if (sourceSheetName.toLowerCase().includes('form responses 1')) {
+      addMissingColumns(destinationSheet); // Add missing columns only for sheets with 'mysheet' in the name
+    }
+
+    Logger.log('Data copied from', sourceSheetName, 'to', destinationSheet.getName());
+
+  } catch (error) {
+    console.error('Error in sheet:', sourceSheetName, '-', error.message);
+  }
+}
+function getOrCreateDestinationSheet(sheetName, destinationSpreadsheet) {
+  var destinationSheet = destinationSpreadsheet.getSheetByName(sheetName);
+
+  if (!destinationSheet) {
+    destinationSheet = destinationSpreadsheet.insertSheet(sheetName);
+  }
+
+  return destinationSheet;
+}
+
+function copyDataToDestinationSheet(data, destinationSheet) {
+  destinationSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+}
+
+function addMissingColumns(destinationSheet) {
+  var headers = destinationSheet.getRange(1, 1, 1, destinationSheet.getLastColumn()).getValues()[0];
+
+  var columnHeaders = ['Employability Status', 'Offer Letter', 'Resume'];
+
+  for (var j = 0; j < columnHeaders.length; j++) {
+    if (headers.indexOf(columnHeaders[j]) === -1) {
+      var lastColumn = destinationSheet.getLastColumn() + 1;
+      destinationSheet.getRange(1, lastColumn).setValue(columnHeaders[j]);
+    }
+  }
+}
+
+function processFileUploads(data, destinationSheet) {
+  var headers = destinationSheet.getRange(1, 1, 1, destinationSheet.getLastColumn()).getValues()[0];
+
+  var resumeColumnIndex = headers.indexOf('Resume') + 1;
+  var offerLetterColumnIndex = headers.indexOf('Offer Letter') + 1;
+
+  for (var row = 2; row <= data.length; row++) {
+    var resumeUrl = data[row - 1][resumeColumnIndex - 1];
+    var offerLetterUrl = data[row - 1][offerLetterColumnIndex - 1];
+
+    if (resumeUrl) {
+      createFileAndFolder('Resume_', resumeUrl);
+    }
+
+    if (offerLetterUrl) {
+      createFileAndFolder('OfferLetter_', offerLetterUrl);
+    }
+  }
+}
+
+function createFileAndFolder(folderPrefix, fileUrl) {
+  var folder = DriveApp.createFolder(folderPrefix + new Date().toISOString());
+  var file = DriveApp.getFileById(fileUrl);
+  folder.createFile(file);
+}
